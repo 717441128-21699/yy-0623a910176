@@ -10,6 +10,8 @@ export interface Chapter {
   paragraphs: Paragraph[];
   createdAt: number;
   rawText: string;
+  chapterVoiceSettings?: VoiceSettings | null;
+  useChapterSettings?: boolean;
 }
 
 export type VoiceType = 'slow' | 'female' | 'male' | 'dialect';
@@ -37,6 +39,14 @@ export interface HighlightWord {
   note?: string;
 }
 
+export interface LastListenRecord {
+  chapterId: string;
+  chapterTitle: string;
+  paragraphIndex: number;
+  paragraphText: string;
+  timestamp: number;
+}
+
 export interface PlayState {
   isPlaying: boolean;
   currentChapterId: string | null;
@@ -45,4 +55,6 @@ export interface PlayState {
   totalDuration: number;
   sleepTimer: number | null;
   sleepTimerRemaining: number | null;
+  lastListen: LastListenRecord | null;
+  playFromStart: boolean;
 }

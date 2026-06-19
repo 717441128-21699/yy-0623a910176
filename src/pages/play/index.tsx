@@ -5,8 +5,8 @@ import classnames from 'classnames';
 import styles from './index.module.scss';
 import { useStore } from '@/store/useStore';
 import { sleepTimerOptions, voiceOptions } from '@/data/mockData';
-import { formatTimerRemaining, getSpeedLabel } from '@/utils/textUtils';
-import { speakText, stopSpeak, preloadVoices, isTtsSpeaking } from '@/utils/tts';
+import { formatTimerRemaining, getSpeedLabel, formatDate } from '@/utils/textUtils';
+import { speakText, stopSpeak, preloadVoices } from '@/utils/tts';
 import BigButton from '@/components/BigButton';
 import { Chapter } from '@/types';
 
@@ -16,6 +16,8 @@ const PlayPage: React.FC = () => {
     playState,
     voiceSettings,
     highlights,
+    getEffectiveVoice,
+    isUsingChapterSettings,
     setPlaying,
     setCurrentChapter,
     setCurrentParagraph,
@@ -24,27 +26,31 @@ const PlayPage: React.FC = () => {
     setSleepTimer,
     decrementSleepTimer,
     decreaseSpeed,
+    startFromBeginning,
+    continueFromLast,
   } = useStore();
 
   const [progress, setProgress] = useState(0);
   const sleepRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const isSpeakingRef = useRef(false);
 
   const currentChapter = chapters.find((c) => c.id === playState.currentChapterId);
   const currentParagraph = currentChapter?.paragraphs[playState.currentParagraphIndex];
   const totalParagraphs = currentChapter?.paragraphs.length || 0;
+  const effectiveVoice = getEffectiveVoice(playState.currentChapterId);
+  const usingChapterSettings = isUsingChapterSettings(playState.currentChapterId);
+  const hasLastListen = !!playState.lastListen && chapters.some((c) => c.id === playState.lastListen?.chapterId);
 
   const currentVoiceName = useMemo(() => {
-    return voiceOptions.find((v) => v.type === voiceSettings.voiceType)?.name || '标准';
-  }, [voiceSettings.voiceType]);
+    return voiceOptions.find((v) => v.type === effectiveVoice.voiceType)?.name || '标准';
+  }, [effectiveVoice.voiceType]);
 
   useEffect(() => {
     preloadVoices();
   }, []);
 
   useEffect(() => {
-    console.log('[Play] 播放状态变更:', playState.isPlaying, '段落:', playState.currentParagraphIndex);
+    console.log('[Play] 播放状态变更:', playState.isPlaying, '章节:', playState.currentChapterId, '段落:', playState.currentParagraphIndex);
 
     if (progressRef.current) {
       clearInterval(progressRef.current);
@@ -52,7 +58,6 @@ const PlayPage: React.FC = () => {
     }
 
     if (playState.isPlaying && currentParagraph) {
-      isSpeakingRef.current = true;
       setProgress(0);
 
       const textLength = currentParagraph.text.length;
@@ -63,12 +68,11 @@ const PlayPage: React.FC = () => {
 
       speakText(
         currentParagraph.text,
-        voiceSettings.voiceType,
-        voiceSettings.speedLevel,
-        voiceSettings.volume,
+        effectiveVoice.voiceType,
+        effectiveVoice.speedLevel,
+        effectiveVoice.volume,
         () => {
           console.log('[Play] 当前段落朗读完成');
-          isSpeakingRef.current = false;
           setProgress(100);
           if (progressRef.current) {
             clearInterval(progressRef.current);
@@ -92,7 +96,6 @@ const PlayPage: React.FC = () => {
     } else {
       if (!playState.isPlaying) {
         stopSpeak();
-        isSpeakingRef.current = false;
       }
     }
 
@@ -163,13 +166,11 @@ const PlayPage: React.FC = () => {
     }
     const newPlaying = !playState.isPlaying;
     setPlaying(newPlaying);
-    console.log('[Play] 切换播放状态:', newPlaying);
     Taro.vibrateShort({ type: 'light' }).catch(() => {});
   };
 
   const handlePrev = () => {
     stopSpeak();
-    isSpeakingRef.current = false;
     setProgress(0);
     prevParagraph();
     Taro.vibrateShort({ type: 'light' }).catch(() => {});
@@ -177,7 +178,6 @@ const PlayPage: React.FC = () => {
 
   const handleNext = () => {
     stopSpeak();
-    isSpeakingRef.current = false;
     setProgress(0);
     nextParagraph();
     Taro.vibrateShort({ type: 'light' }).catch(() => {});
@@ -185,7 +185,6 @@ const PlayPage: React.FC = () => {
 
   const handleSelectChapter = (chapter: Chapter) => {
     stopSpeak();
-    isSpeakingRef.current = false;
     setProgress(0);
     setCurrentChapter(chapter.id);
     setCurrentParagraph(0);
@@ -216,17 +215,18 @@ const PlayPage: React.FC = () => {
   const handleDecreaseSpeedQuick = () => {
     decreaseSpeed();
     Taro.showToast({
-      title: `语速已降低：${getSpeedLabel(Math.max(0, voiceSettings.speedLevel))}`,
+      title: `语速已降低：${getSpeedLabel(effectiveVoice.speedLevel)}`,
       icon: 'none',
     });
     if (playState.isPlaying && currentParagraph) {
       stopSpeak();
       setTimeout(() => {
+        const newSpeed = Math.max(0, effectiveVoice.speedLevel - 1);
         speakText(
           currentParagraph.text,
-          voiceSettings.voiceType,
-          Math.max(0, voiceSettings.speedLevel - 1),
-          voiceSettings.volume,
+          effectiveVoice.voiceType,
+          newSpeed,
+          effectiveVoice.volume,
           () => {
             nextParagraph();
           }
@@ -238,6 +238,10 @@ const PlayPage: React.FC = () => {
 
   const goToSelect = () => {
     Taro.switchTab({ url: '/pages/select/index' }).catch(() => {});
+  };
+
+  const goToTune = () => {
+    Taro.switchTab({ url: '/pages/tune/index' }).catch(() => {});
   };
 
   const formatTimerLabel = (seconds: number) => {
@@ -275,21 +279,75 @@ const PlayPage: React.FC = () => {
     ? ((playState.currentParagraphIndex + progress / 100) / totalParagraphs) * 100
     : 0;
 
+  const currentChapterIdx = chapters.findIndex((c) => c.id === playState.currentChapterId);
+  const totalChapters = chapters.length;
+
   return (
     <ScrollView scrollY className={styles.page}>
-      <View className={styles.chapterHeader}>
-        <View className={styles.chapterBadge}>
-          <Text className={styles.chapterBadgeText}>
-            {playState.isPlaying ? '🔊 正在播放' : '⏸️ 已暂停'}
+      <View className={styles.quickActions}>
+        <View
+          className={classnames(styles.quickBtn, styles.quickBtnStart)}
+          onClick={startFromBeginning}
+        >
+          <Text className={styles.quickBtnIcon}>🚀</Text>
+          <Text className={styles.quickBtnTitle}>从第一章开始</Text>
+          <Text className={styles.quickBtnSub}>
+            共{totalChapters}章 连续听
           </Text>
+        </View>
+        <View
+          className={classnames(styles.quickBtn, styles.quickBtnContinue)}
+          onClick={continueFromLast}
+        >
+          <Text className={styles.quickBtnIcon}>{hasLastListen ? '⏯️' : '▶️'}</Text>
+          <Text className={styles.quickBtnTitle}>
+            {hasLastListen ? '继续上次听' : '开始播放'}
+          </Text>
+          <Text className={styles.quickBtnSub}>
+            {hasLastListen ? '接着上次的位置' : `第${currentChapterIdx + 1}章`}
+          </Text>
+        </View>
+      </View>
+
+      {hasLastListen && playState.lastListen && (
+        <View className={styles.lastListenCard} onClick={continueFromLast}>
+          <Text className={styles.lastListenLabel}>
+            📌 上次听到（点击继续）
+          </Text>
+          <Text className={styles.lastListenContent}>
+            {playState.lastListen.chapterTitle} · 第{playState.lastListen.paragraphIndex + 1}段
+          </Text>
+          <Text className={styles.lastListenDetail}>
+            「{playState.lastListen.paragraphText}...」· {formatDate(playState.lastListen.timestamp)}
+          </Text>
+        </View>
+      )}
+
+      <View className={styles.chapterHeader}>
+        <View className={styles.headerBadges}>
+          <View className={styles.chapterBadge}>
+            <Text className={styles.chapterBadgeText}>
+              {playState.isPlaying ? '🔊 正在播放' : '⏸️ 已暂停'}
+            </Text>
+          </View>
+          <View
+            className={classnames(styles.settingsTag, {
+              [styles.settingsTagGlobal]: !usingChapterSettings,
+              [styles.settingsTagChapter]: usingChapterSettings,
+            })}
+          >
+            <Text className={styles.settingsTagText}>
+              {usingChapterSettings ? '⭐ 本章独立声音' : '🌐 使用全局设置'}
+            </Text>
+          </View>
         </View>
         <Text className={styles.chapterTitle}>{currentChapter.title}</Text>
         <View className={styles.chapterProgress}>
           <Text className={styles.progressText}>
-            第 {playState.currentParagraphIndex + 1} / {totalParagraphs} 段
+            第 {currentChapterIdx + 1}/{totalChapters}章 · 第 {playState.currentParagraphIndex + 1}/{totalParagraphs}段
           </Text>
           <Text className={styles.progressSub}>
-            约剩 {Math.max(0, totalParagraphs - playState.currentParagraphIndex - 1)} 分钟
+            {currentChapterIdx < totalChapters - 1 ? '听完自动进入下一章 →' : '最后一章'}
           </Text>
         </View>
       </View>
@@ -307,7 +365,7 @@ const PlayPage: React.FC = () => {
           </View>
           <View className={styles.voiceTag}>
             <Text className={styles.voiceTagText}>
-              🎙️ {currentVoiceName} · {getSpeedLabel(voiceSettings.speedLevel)}
+              🎙️ {currentVoiceName} · {getSpeedLabel(effectiveVoice.speedLevel)}
             </Text>
           </View>
         </View>
@@ -361,7 +419,7 @@ const PlayPage: React.FC = () => {
         <View className={styles.progressLabels}>
           <Text className={styles.progressLabel}>开始</Text>
           <Text className={styles.progressLabel}>
-            {Math.round(overallProgress)}%
+            本章 {Math.round(overallProgress)}%
           </Text>
           <Text className={styles.progressLabel}>结束</Text>
         </View>
@@ -389,12 +447,7 @@ const PlayPage: React.FC = () => {
             <Text className={styles.secCtrlIcon}>🐢</Text>
             <Text className={styles.secCtrlText}>再慢一点</Text>
           </View>
-          <View
-            className={styles.secCtrlBtn}
-            onClick={() =>
-              Taro.switchTab({ url: '/pages/tune/index' }).catch(() => {})
-            }
-          >
+          <View className={styles.secCtrlBtn} onClick={goToTune}>
             <Text className={styles.secCtrlIcon}>⚙️</Text>
             <Text className={styles.secCtrlText}>调整设置</Text>
           </View>
@@ -403,13 +456,15 @@ const PlayPage: React.FC = () => {
 
       <View className={styles.chapterListSection}>
         <View className={styles.chapterListHeader}>
-          <Text className={styles.chapterListTitle}>📚 章节列表</Text>
+          <Text className={styles.chapterListTitle}>📚 章节列表（按顺序连续播放）</Text>
           <Text className={styles.chapterListCount}>
-            共 {chapters.length} 章
+            共 {totalChapters} 章
           </Text>
         </View>
         {chapters.map((ch, idx) => {
           const isActive = ch.id === playState.currentChapterId;
+          const isLastListen = playState.lastListen?.chapterId === ch.id;
+          const hasCustom = !!(ch.useChapterSettings && ch.chapterVoiceSettings);
           return (
             <View
               key={ch.id}
@@ -437,6 +492,18 @@ const PlayPage: React.FC = () => {
                   <Text className={styles.chapterItemMeta}>
                     {ch.paragraphs.length}段 · 约{ch.paragraphs.length * 2}分钟
                   </Text>
+                  <View className={styles.chapterItemBadges}>
+                    {hasCustom && (
+                      <View className={classnames(styles.chapterBadge, styles.chapterBadgeCustom)}>
+                        ⭐ 独立声音
+                      </View>
+                    )}
+                    {isLastListen && (
+                      <View className={classnames(styles.chapterBadge, styles.chapterBadgeLast)}>
+                        📌 上次听到
+                      </View>
+                    )}
+                  </View>
                 </View>
               </View>
             </View>

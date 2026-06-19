@@ -52,11 +52,131 @@
 .chapterInfo {
   display: flex;
   gap: $spacing-lg;
+  flex-wrap: wrap;
 }
 
 .chapterInfoItem {
   font-size: $font-size-sm;
   color: rgba(255, 255, 255, 0.9);
+}
+
+.settingsScopeCard {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  padding: $spacing-lg;
+  box-shadow: $shadow-card;
+  margin-bottom: $spacing-md;
+  border: 3rpx solid $color-border;
+}
+
+.scopeTitle {
+  display: block;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-md;
+}
+
+.scopeRow {
+  display: flex;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-md;
+}
+
+.scopeOption {
+  flex: 1;
+  height: 96rpx;
+  border-radius: $radius-md;
+  background: $color-bg-page;
+  border: 3rpx solid $color-border;
+  padding: $spacing-sm;
+  @include flex-center;
+  flex-direction: column;
+  gap: 4rpx;
+  transition: all $transition-fast;
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+.scopeOptionActive {
+  &.scopeGlobal {
+    background: linear-gradient(135deg, rgba(100, 181, 246, 0.15), rgba(100, 181, 246, 0.05));
+    border-color: #64B5F6;
+  }
+
+  &.scopeChapter {
+    background: linear-gradient(135deg, rgba(156, 39, 176, 0.12), rgba(156, 39, 176, 0.04));
+    border-color: #9C27B0;
+  }
+
+  .scopeOptionTitle {
+    color: $color-primary-dark;
+    font-weight: $font-weight-semibold;
+  }
+
+  .scopeOptionSub {
+    color: $color-text-secondary;
+  }
+}
+
+.scopeOptionTitle {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-secondary;
+}
+
+.scopeOptionSub {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+}
+
+.scopeIcon {
+  font-size: 28rpx;
+  margin-right: $spacing-xs;
+}
+
+.scopeActions {
+  display: flex;
+  gap: $spacing-sm;
+  padding-top: $spacing-md;
+  border-top: 2rpx dashed $color-divider;
+}
+
+.scopeActionBtn {
+  flex: 1;
+  height: 72rpx;
+  border-radius: $radius-md;
+  @include flex-center;
+  transition: all $transition-fast;
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+.scopeActionCopy {
+  background: rgba(100, 181, 246, 0.15);
+  border: 2rpx solid rgba(100, 181, 246, 0.4);
+}
+
+.scopeActionReset {
+  background: rgba(229, 115, 115, 0.12);
+  border: 2rpx solid rgba(229, 115, 115, 0.35);
+}
+
+.scopeActionText {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+}
+
+.scopeActionCopy .scopeActionText {
+  color: #1976D2;
+}
+
+.scopeActionReset .scopeActionText {
+  color: #C62828;
 }
 
 .settingsCard {

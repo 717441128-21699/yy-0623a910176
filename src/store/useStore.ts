@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import Taro from '@tarojs/taro';
-import { Chapter, VoiceSettings, HighlightWord, PlayState, VoiceType } from '@/types';
+import { Chapter, VoiceSettings, HighlightWord, PlayState, VoiceType, LastListenRecord } from '@/types';
 import { mockChapters, defaultVoiceSettings, defaultHighlights } from '@/data/mockData';
 import { createChapter, generateId } from '@/utils/textUtils';
 import { stopSpeak } from '@/utils/tts';
@@ -13,6 +13,7 @@ interface PersistedData {
   highlights: HighlightWord[];
   lastChapterId: string | null;
   lastParagraphIndex: number;
+  lastListen: LastListenRecord | null;
 }
 
 const loadFromStorage = (): Partial<PersistedData> => {
@@ -31,7 +32,6 @@ const loadFromStorage = (): Partial<PersistedData> => {
 const saveToStorage = (data: PersistedData): void => {
   try {
     Taro.setStorageSync(STORAGE_KEY, data);
-    console.log('[Store] 已保存到本地存储');
   } catch (error) {
     console.error('[Store] 写入本地存储失败:', error);
   }
@@ -41,9 +41,33 @@ const persisted = loadFromStorage();
 const initialChapters = persisted.chapters && persisted.chapters.length > 0
   ? persisted.chapters
   : [...mockChapters];
-const initialChapterId = persisted.lastChapterId && initialChapters.some((c) => c.id === persisted.lastChapterId)
-  ? persisted.lastChapterId
-  : initialChapters[0]?.id || null;
+
+const initialChapterId = (() => {
+  if (initialChapters.length === 0) return null;
+  const lastChapterId = persisted.lastListen?.chapterId || persisted.lastChapterId;
+  if (lastChapterId && initialChapters.some((c) => c.id === lastChapterId)) {
+    return lastChapterId;
+  }
+  return initialChapters[0].id;
+})();
+
+const initialParagraphIndex = (() => {
+  if (initialChapters.length === 0) return 0;
+  if (persisted.lastListen && persisted.lastListen.chapterId === initialChapterId) {
+    return persisted.lastListen.paragraphIndex || 0;
+  }
+  return persisted.lastParagraphIndex || 0;
+})();
+
+const getEffectiveVoiceSettings = (
+  chapter: Chapter | undefined,
+  globalSettings: VoiceSettings
+): VoiceSettings => {
+  if (chapter?.useChapterSettings && chapter.chapterVoiceSettings) {
+    return chapter.chapterVoiceSettings;
+  }
+  return globalSettings;
+};
 
 interface AppState {
   chapters: Chapter[];
@@ -51,6 +75,9 @@ interface AppState {
   highlights: HighlightWord[];
   playState: PlayState;
   currentEditingChapter: Chapter | null;
+
+  getEffectiveVoice: (chapterId: string | null) => VoiceSettings;
+  isUsingChapterSettings: (chapterId: string | null) => boolean;
 
   addChapter: (title: string, rawText: string) => Chapter;
   deleteChapter: (id: string) => void;
@@ -61,6 +88,10 @@ interface AppState {
   setSpeedLevel: (level: number) => void;
   decreaseSpeed: () => void;
   setVolume: (volume: number) => void;
+
+  setChapterVoiceSettings: (chapterId: string, settings: VoiceSettings | null) => void;
+  toggleChapterSettings: (chapterId: string, enabled: boolean) => void;
+  resetChapterToGlobal: (chapterId: string) => void;
 
   addHighlight: (word: string, type: HighlightWord['type'], note?: string) => void;
   removeHighlight: (id: string) => void;
@@ -74,6 +105,10 @@ interface AppState {
   decrementSleepTimer: () => void;
   stopPlay: () => void;
 
+  startFromBeginning: () => void;
+  continueFromLast: () => void;
+  updateLastListen: () => void;
+
   persist: () => void;
 }
 
@@ -86,13 +121,26 @@ export const useStore = create<AppState>((set, get) => ({
   playState: {
     isPlaying: false,
     currentChapterId: initialChapterId,
-    currentParagraphIndex: persisted.lastParagraphIndex || 0,
+    currentParagraphIndex: initialParagraphIndex,
     currentProgress: 0,
     totalDuration: 0,
     sleepTimer: null,
     sleepTimerRemaining: null,
+    lastListen: persisted.lastListen || null,
+    playFromStart: false,
   },
   currentEditingChapter: null,
+
+  getEffectiveVoice: (chapterId) => {
+    const state = get();
+    const chapter = state.chapters.find((c) => c.id === chapterId);
+    return getEffectiveVoiceSettings(chapter, state.voiceSettings);
+  },
+
+  isUsingChapterSettings: (chapterId) => {
+    const chapter = get().chapters.find((c) => c.id === chapterId);
+    return !!(chapter?.useChapterSettings && chapter.chapterVoiceSettings);
+  },
 
   persist: () => {
     const state = get();
@@ -102,6 +150,7 @@ export const useStore = create<AppState>((set, get) => ({
       highlights: state.highlights,
       lastChapterId: state.playState.currentChapterId,
       lastParagraphIndex: state.playState.currentParagraphIndex,
+      lastListen: state.playState.lastListen,
     });
   },
 
@@ -109,17 +158,10 @@ export const useStore = create<AppState>((set, get) => ({
     const newChapter = createChapter(title, rawText);
     set((state) => {
       const newChapters = [...state.chapters, newChapter];
-      setTimeout(() => {
-        get().persist();
-      }, 0);
+      setTimeout(() => get().persist(), 0);
       return {
         chapters: newChapters,
         currentEditingChapter: newChapter,
-        playState: {
-          ...state.playState,
-          currentChapterId: newChapter.id,
-          currentParagraphIndex: 0,
-        },
       };
     });
     console.log('[Store] 新增章节(追加到末尾):', newChapter.title, '段落数:', newChapter.paragraphs.length);
@@ -132,9 +174,10 @@ export const useStore = create<AppState>((set, get) => ({
       const newCurrentId = state.playState.currentChapterId === id
         ? newChapters[0]?.id || null
         : state.playState.currentChapterId;
-      setTimeout(() => {
-        get().persist();
-      }, 0);
+      const newLastListen = state.playState.lastListen?.chapterId === id
+        ? null
+        : state.playState.lastListen;
+      setTimeout(() => get().persist(), 0);
       return {
         chapters: newChapters,
         playState: {
@@ -142,6 +185,7 @@ export const useStore = create<AppState>((set, get) => ({
           currentChapterId: newCurrentId,
           currentParagraphIndex: 0,
           isPlaying: false,
+          lastListen: newLastListen,
         },
       };
     });
@@ -165,19 +209,15 @@ export const useStore = create<AppState>((set, get) => ({
           : ch
       ),
     }));
-    setTimeout(() => {
-      get().persist();
-    }, 0);
+    setTimeout(() => get().persist(), 0);
   },
 
   setVoiceType: (type) => {
     set((state) => ({
       voiceSettings: { ...state.voiceSettings, voiceType: type },
     }));
-    setTimeout(() => {
-      get().persist();
-    }, 0);
-    console.log('[Store] 切换声音类型:', type);
+    setTimeout(() => get().persist(), 0);
+    console.log('[Store] 切换全局声音类型:', type);
   },
 
   setSpeedLevel: (level) => {
@@ -185,9 +225,7 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({
       voiceSettings: { ...state.voiceSettings, speedLevel: safeLevel },
     }));
-    setTimeout(() => {
-      get().persist();
-    }, 0);
+    setTimeout(() => get().persist(), 0);
   },
 
   decreaseSpeed: () => {
@@ -196,10 +234,8 @@ export const useStore = create<AppState>((set, get) => ({
     set({
       voiceSettings: { ...state.voiceSettings, speedLevel: newLevel },
     });
-    setTimeout(() => {
-      get().persist();
-    }, 0);
-    console.log('[Store] 降低语速到等级:', newLevel);
+    setTimeout(() => get().persist(), 0);
+    console.log('[Store] 降低全局语速到等级:', newLevel);
   },
 
   setVolume: (volume) => {
@@ -207,9 +243,53 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({
       voiceSettings: { ...state.voiceSettings, volume: safeVolume },
     }));
-    setTimeout(() => {
-      get().persist();
-    }, 0);
+    setTimeout(() => get().persist(), 0);
+  },
+
+  setChapterVoiceSettings: (chapterId, settings) => {
+    set((state) => ({
+      chapters: state.chapters.map((ch) =>
+        ch.id === chapterId
+          ? {
+              ...ch,
+              chapterVoiceSettings: settings,
+              useChapterSettings: settings ? true : ch.useChapterSettings,
+            }
+          : ch
+      ),
+    }));
+    setTimeout(() => get().persist(), 0);
+    console.log('[Store] 设置章节独立声音:', chapterId, settings ? '已设置' : '已清除');
+  },
+
+  toggleChapterSettings: (chapterId, enabled) => {
+    set((state) => ({
+      chapters: state.chapters.map((ch) => {
+        if (ch.id !== chapterId) return ch;
+        if (enabled && !ch.chapterVoiceSettings) {
+          return {
+            ...ch,
+            useChapterSettings: true,
+            chapterVoiceSettings: { ...state.voiceSettings },
+          };
+        }
+        return { ...ch, useChapterSettings: enabled };
+      }),
+    }));
+    setTimeout(() => get().persist(), 0);
+    console.log('[Store] 切换章节独立设置开关:', chapterId, enabled);
+  },
+
+  resetChapterToGlobal: (chapterId) => {
+    set((state) => ({
+      chapters: state.chapters.map((ch) =>
+        ch.id === chapterId
+          ? { ...ch, useChapterSettings: false, chapterVoiceSettings: null }
+          : ch
+      ),
+    }));
+    setTimeout(() => get().persist(), 0);
+    console.log('[Store] 重置章节到全局设置:', chapterId);
   },
 
   addHighlight: (word, type, note) => {
@@ -221,9 +301,7 @@ export const useStore = create<AppState>((set, get) => ({
         { id: generateId(), word, type, note },
       ],
     }));
-    setTimeout(() => {
-      get().persist();
-    }, 0);
+    setTimeout(() => get().persist(), 0);
     console.log('[Store] 添加重点词:', word);
   },
 
@@ -231,14 +309,16 @@ export const useStore = create<AppState>((set, get) => ({
     set((state) => ({
       highlights: state.highlights.filter((h) => h.id !== id),
     }));
-    setTimeout(() => {
-      get().persist();
-    }, 0);
+    setTimeout(() => get().persist(), 0);
   },
 
   setPlaying: (isPlaying) => {
-    set((state) => ({
-      playState: { ...state.playState, isPlaying },
+    const state = get();
+    if (!isPlaying && state.playState.isPlaying) {
+      get().updateLastListen();
+    }
+    set((st) => ({
+      playState: { ...st.playState, isPlaying },
     }));
     if (!isPlaying) {
       stopSpeak();
@@ -246,27 +326,28 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   setCurrentChapter: (chapterId) => {
-    set((state) => ({
+    const state = get();
+    const chapter = state.chapters.find((c) => c.id === chapterId);
+    if (state.playState.isPlaying) {
+      get().updateLastListen();
+    }
+    set((st) => ({
       playState: {
-        ...state.playState,
+        ...st.playState,
         currentChapterId: chapterId,
         currentParagraphIndex: 0,
         currentProgress: 0,
       },
     }));
-    setTimeout(() => {
-      get().persist();
-    }, 0);
-    console.log('[Store] 切换播放章节:', chapterId);
+    setTimeout(() => get().persist(), 0);
+    console.log('[Store] 切换播放章节:', chapter?.title || chapterId);
   },
 
   setCurrentParagraph: (index) => {
     set((state) => ({
       playState: { ...state.playState, currentParagraphIndex: index },
     }));
-    setTimeout(() => {
-      get().persist();
-    }, 0);
+    setTimeout(() => get().persist(), 0);
   },
 
   nextParagraph: () => {
@@ -282,20 +363,62 @@ export const useStore = create<AppState>((set, get) => ({
           currentProgress: 0,
         },
       });
-      setTimeout(() => {
-        get().persist();
-      }, 0);
+      setTimeout(() => get().persist(), 0);
     } else {
-      set({
-        playState: { ...state.playState, isPlaying: false },
-      });
-      stopSpeak();
-      console.log('[Store] 播放完成');
+      const currentIdx = state.chapters.findIndex((c) => c.id === state.playState.currentChapterId);
+      if (currentIdx < state.chapters.length - 1) {
+        const nextChapter = state.chapters[currentIdx + 1];
+        get().updateLastListen();
+        set({
+          playState: {
+            ...state.playState,
+            currentChapterId: nextChapter.id,
+            currentParagraphIndex: 0,
+            currentProgress: 0,
+          },
+        });
+        setTimeout(() => get().persist(), 0);
+        console.log('[Store] 自动进入下一章:', nextChapter.title);
+        Taro.showToast({
+          title: `进入：${nextChapter.title}`,
+          icon: 'none',
+          duration: 1800,
+        });
+      } else {
+        get().updateLastListen();
+        set({
+          playState: { ...state.playState, isPlaying: false },
+        });
+        stopSpeak();
+        Taro.showToast({ title: '全部章节已听完 🎉', icon: 'success', duration: 2500 });
+        console.log('[Store] 全部章节播放完成');
+      }
     }
   },
 
   prevParagraph: () => {
     const state = get();
+    if (state.playState.currentParagraphIndex === 0) {
+      const currentIdx = state.chapters.findIndex((c) => c.id === state.playState.currentChapterId);
+      if (currentIdx > 0) {
+        const prevChapter = state.chapters[currentIdx - 1];
+        set({
+          playState: {
+            ...state.playState,
+            currentChapterId: prevChapter.id,
+            currentParagraphIndex: Math.max(0, prevChapter.paragraphs.length - 1),
+            currentProgress: 0,
+          },
+        });
+        setTimeout(() => get().persist(), 0);
+        Taro.showToast({
+          title: `上一章：${prevChapter.title}`,
+          icon: 'none',
+          duration: 1500,
+        });
+        return;
+      }
+    }
     const newIndex = Math.max(0, state.playState.currentParagraphIndex - 1);
     set({
       playState: {
@@ -304,9 +427,7 @@ export const useStore = create<AppState>((set, get) => ({
         currentProgress: 0,
       },
     });
-    setTimeout(() => {
-      get().persist();
-    }, 0);
+    setTimeout(() => get().persist(), 0);
   },
 
   setSleepTimer: (seconds) => {
@@ -329,6 +450,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (state.playState.sleepTimerRemaining === null) return;
     const remaining = state.playState.sleepTimerRemaining - 1;
     if (remaining <= 0) {
+      get().updateLastListen();
       set({
         playState: {
           ...state.playState,
@@ -338,6 +460,7 @@ export const useStore = create<AppState>((set, get) => ({
         },
       });
       stopSpeak();
+      setTimeout(() => get().persist(), 0);
       console.log('[Store] 睡眠定时结束，停止播放');
     } else {
       set({
@@ -347,6 +470,9 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   stopPlay: () => {
+    if (get().playState.isPlaying) {
+      get().updateLastListen();
+    }
     set((state) => ({
       playState: {
         ...state.playState,
@@ -355,5 +481,89 @@ export const useStore = create<AppState>((set, get) => ({
       },
     }));
     stopSpeak();
+  },
+
+  startFromBeginning: () => {
+    const state = get();
+    if (state.chapters.length === 0) return;
+    const firstChapter = state.chapters[0];
+    stopSpeak();
+    set({
+      playState: {
+        ...state.playState,
+        currentChapterId: firstChapter.id,
+        currentParagraphIndex: 0,
+        currentProgress: 0,
+        isPlaying: true,
+        playFromStart: true,
+      },
+    });
+    setTimeout(() => get().persist(), 0);
+    Taro.showToast({
+      title: `从头开始：${firstChapter.title}`,
+      icon: 'none',
+      duration: 1800,
+    });
+    Taro.vibrateShort({ type: 'medium' }).catch(() => {});
+    console.log('[Store] 从头开始播放');
+  },
+
+  continueFromLast: () => {
+    const state = get();
+    const lastListen = state.playState.lastListen;
+    if (!lastListen || state.chapters.length === 0) {
+      if (state.chapters.length > 0) {
+        get().startFromBeginning();
+      }
+      return;
+    }
+    const chapterExists = state.chapters.some((c) => c.id === lastListen.chapterId);
+    if (!chapterExists) {
+      get().startFromBeginning();
+      return;
+    }
+    const chapter = state.chapters.find((c) => c.id === lastListen.chapterId)!;
+    const safeParagraphIndex = Math.min(
+      lastListen.paragraphIndex,
+      Math.max(0, chapter.paragraphs.length - 1)
+    );
+    stopSpeak();
+    set({
+      playState: {
+        ...state.playState,
+        currentChapterId: lastListen.chapterId,
+        currentParagraphIndex: safeParagraphIndex,
+        currentProgress: 0,
+        isPlaying: true,
+        playFromStart: false,
+      },
+    });
+    setTimeout(() => get().persist(), 0);
+    Taro.showToast({
+      title: `继续收听：${lastListen.chapterTitle.slice(0, 10)}...`,
+      icon: 'none',
+      duration: 1800,
+    });
+    Taro.vibrateShort({ type: 'medium' }).catch(() => {});
+    console.log('[Store] 继续上次收听:', lastListen.chapterTitle, '第', safeParagraphIndex + 1, '段');
+  },
+
+  updateLastListen: () => {
+    const state = get();
+    const chapter = state.chapters.find((c) => c.id === state.playState.currentChapterId);
+    if (!chapter) return;
+    const paragraph = chapter.paragraphs[state.playState.currentParagraphIndex];
+    const record: LastListenRecord = {
+      chapterId: chapter.id,
+      chapterTitle: chapter.title,
+      paragraphIndex: state.playState.currentParagraphIndex,
+      paragraphText: paragraph?.text?.slice(0, 30) || '',
+      timestamp: Date.now(),
+    };
+    set((st) => ({
+      playState: { ...st.playState, lastListen: record },
+    }));
+    setTimeout(() => get().persist(), 0);
+    console.log('[Store] 更新听书记录:', chapter.title, '第', record.paragraphIndex + 1, '段');
   },
 }));
