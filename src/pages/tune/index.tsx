@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView } from '@tarojs/components';
 import Taro from '@tarojs/taro';
 import styles from './index.module.scss';
@@ -6,6 +6,7 @@ import { useStore } from '@/store/useStore';
 import { voiceOptions, sleepTimerOptions } from '@/data/mockData';
 import { VoiceType, HighlightType } from '@/types';
 import { getSpeedLabel } from '@/utils/textUtils';
+import { speakText, stopSpeak, preloadVoices } from '@/utils/tts';
 import VoiceOptionCard from '@/components/VoiceOption';
 import BigButton from '@/components/BigButton';
 import HighlightInput from '@/components/HighlightInput';
@@ -32,47 +33,118 @@ const TunePage: React.FC = () => {
 
   const currentChapter = chapters.find((c) => c.id === playState.currentChapterId);
 
+  useEffect(() => {
+    preloadVoices();
+    return () => {
+      stopSpeak();
+    };
+  }, []);
+
   const handlePreview = (type: VoiceType) => {
     if (previewVoice === type) {
       setPreviewVoice(null);
+      stopSpeak();
       return;
     }
+
+    const opt = voiceOptions.find((v) => v.type === type);
+    if (!opt) return;
+
+    stopSpeak();
     setPreviewVoice(type);
-    console.log('[Tune] 试听声音:', type);
-    setTimeout(() => {
-      setPreviewVoice((prev) => (prev === type ? null : prev));
-    }, 2500);
+
+    const previewText = currentChapter?.paragraphs[0]?.text?.slice(0, 40) || opt.sample;
+
+    speakText(
+      previewText,
+      type,
+      voiceSettings.speedLevel,
+      voiceSettings.volume,
+      () => {
+        console.log('[Tune] 试听完成:', type);
+        setPreviewVoice((prev) => (prev === type ? null : prev));
+      },
+      () => {
+        console.log('[Tune] 试听开始:', type);
+      }
+    );
+
     Taro.showToast({
-      title: voiceOptions.find((v) => v.type === type)?.name + ' 试听中',
+      title: opt.name + ' 试听中',
       icon: 'none',
-      duration: 1500,
+      duration: 2000,
     });
+    Taro.vibrateShort({ type: 'light' }).catch(() => {});
   };
 
   const handleSpeedClick = (level: number) => {
     setSpeedLevel(level);
+    Taro.vibrateShort({ type: 'light' }).catch(() => {});
   };
 
   const handleDecreaseSpeed = () => {
     decreaseSpeed();
+    const newLevel = Math.max(0, voiceSettings.speedLevel);
     Taro.showToast({
-      title: `语速已降至：${getSpeedLabel(voiceSettings.speedLevel - 1 >= 0 ? voiceSettings.speedLevel - 1 : 0)}`,
+      title: `语速已降至：${getSpeedLabel(newLevel)}`,
       icon: 'none',
       duration: 1500,
     });
+    Taro.vibrateShort({ type: 'light' }).catch(() => {});
+
+    if (previewVoice) {
+      stopSpeak();
+      const opt = voiceOptions.find((v) => v.type === previewVoice);
+      if (opt) {
+        const previewText = currentChapter?.paragraphs[0]?.text?.slice(0, 40) || opt.sample;
+        setTimeout(() => {
+          speakText(
+            previewText,
+            previewVoice,
+            newLevel,
+            voiceSettings.volume,
+            () => {
+              setPreviewVoice((prev) => (prev === previewVoice ? null : prev));
+            }
+          );
+        }, 200);
+      }
+    }
   };
 
   const handleIncreaseSpeed = () => {
     const newLevel = Math.min(6, voiceSettings.speedLevel + 1);
     setSpeedLevel(newLevel);
+    Taro.vibrateShort({ type: 'light' }).catch(() => {});
+
+    if (previewVoice) {
+      stopSpeak();
+      const opt = voiceOptions.find((v) => v.type === previewVoice);
+      if (opt) {
+        const previewText = currentChapter?.paragraphs[0]?.text?.slice(0, 40) || opt.sample;
+        setTimeout(() => {
+          speakText(
+            previewText,
+            previewVoice,
+            newLevel,
+            voiceSettings.volume,
+            () => {
+              setPreviewVoice((prev) => (prev === previewVoice ? null : prev));
+            }
+          );
+        }, 200);
+      }
+    }
   };
 
   const handleVolumePreset = (vol: number) => {
     setVolume(vol);
+    Taro.vibrateShort({ type: 'light' }).catch(() => {});
   };
 
   const handleAddHighlight = (word: string, type: HighlightType) => {
     addHighlight(word, type);
+    Taro.vibrateShort({ type: 'light' }).catch(() => {});
   };
 
   const handleRemoveHighlight = (id: string) => {
@@ -85,8 +157,11 @@ const TunePage: React.FC = () => {
       Taro.switchTab({ url: '/pages/select/index' }).catch(() => {});
       return;
     }
+    stopSpeak();
+    setPreviewVoice(null);
     setPlaying(true);
     Taro.showToast({ title: '设置已生效，开始播放', icon: 'success' });
+    Taro.vibrateShort({ type: 'medium' }).catch(() => {});
     setTimeout(() => {
       Taro.switchTab({ url: '/pages/play/index' }).catch(() => {});
     }, 800);
@@ -94,11 +169,15 @@ const TunePage: React.FC = () => {
   };
 
   const handleSaveOnly = () => {
+    stopSpeak();
+    setPreviewVoice(null);
     Taro.showToast({ title: '设置已保存', icon: 'success' });
+    Taro.vibrateShort({ type: 'light' }).catch(() => {});
     console.log('[Tune] 仅保存设置');
   };
 
   const goToSelect = () => {
+    stopSpeak();
     Taro.switchTab({ url: '/pages/select/index' }).catch(() => {});
   };
 
@@ -144,7 +223,7 @@ const TunePage: React.FC = () => {
         <View className={styles.section}>
           <View className={styles.sectionTitle}>
             <Text className={styles.title}>🎙️ 选择声音</Text>
-            <Text className={styles.sub}>点击「试听」感受不同的声音效果</Text>
+            <Text className={styles.sub}>点击「试听」感受不同的声音效果（真的能听到哦！）</Text>
           </View>
 
           {voiceOptions.map((opt) => (
@@ -153,7 +232,10 @@ const TunePage: React.FC = () => {
               option={opt}
               isSelected={voiceSettings.voiceType === opt.type}
               isPlaying={previewVoice === opt.type}
-              onSelect={() => setVoiceType(opt.type)}
+              onSelect={() => {
+                setVoiceType(opt.type);
+                Taro.vibrateShort({ type: 'light' }).catch(() => {});
+              }}
               onPreview={() => handlePreview(opt.type)}
             />
           ))}
@@ -189,7 +271,7 @@ const TunePage: React.FC = () => {
               <View className={styles.tipCard}>
                 <Text className={styles.tipText}>
                   <Text className={styles.tipStrong}>💡 贴心提示：</Text>
-                  老人说听不清？直接点下面的「再慢一点」按钮，可以反复降速直到清晰为止。
+                  老人说听不清？直接点下面的「再慢一点」按钮，可以反复降速直到清晰为止。正在试听时调整语速会立即生效！
                 </Text>
               </View>
 

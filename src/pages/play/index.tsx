@@ -6,6 +6,7 @@ import styles from './index.module.scss';
 import { useStore } from '@/store/useStore';
 import { sleepTimerOptions, voiceOptions } from '@/data/mockData';
 import { formatTimerRemaining, getSpeedLabel } from '@/utils/textUtils';
+import { speakText, stopSpeak, preloadVoices, isTtsSpeaking } from '@/utils/tts';
 import BigButton from '@/components/BigButton';
 import { Chapter } from '@/types';
 
@@ -25,9 +26,10 @@ const PlayPage: React.FC = () => {
     decreaseSpeed,
   } = useStore();
 
-  const [simulatedProgress, setSimulatedProgress] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [progress, setProgress] = useState(0);
   const sleepRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isSpeakingRef = useRef(false);
 
   const currentChapter = chapters.find((c) => c.id === playState.currentChapterId);
   const currentParagraph = currentChapter?.paragraphs[playState.currentParagraphIndex];
@@ -38,31 +40,69 @@ const PlayPage: React.FC = () => {
   }, [voiceSettings.voiceType]);
 
   useEffect(() => {
-    console.log('[Play] 播放状态变更:', playState.isPlaying);
-    if (playState.isPlaying && currentChapter) {
-      timerRef.current = setInterval(() => {
-        setSimulatedProgress((prev) => {
-          const newProgress = prev + 2;
-          if (newProgress >= 100) {
-            nextParagraph();
-            return 0;
+    preloadVoices();
+  }, []);
+
+  useEffect(() => {
+    console.log('[Play] 播放状态变更:', playState.isPlaying, '段落:', playState.currentParagraphIndex);
+
+    if (progressRef.current) {
+      clearInterval(progressRef.current);
+      progressRef.current = null;
+    }
+
+    if (playState.isPlaying && currentParagraph) {
+      isSpeakingRef.current = true;
+      setProgress(0);
+
+      const textLength = currentParagraph.text.length;
+      const estimatedMs = Math.max(3000, textLength * 220);
+      const tickInterval = 100;
+      const ticks = estimatedMs / tickInterval;
+      const increment = 100 / ticks;
+
+      speakText(
+        currentParagraph.text,
+        voiceSettings.voiceType,
+        voiceSettings.speedLevel,
+        voiceSettings.volume,
+        () => {
+          console.log('[Play] 当前段落朗读完成');
+          isSpeakingRef.current = false;
+          setProgress(100);
+          if (progressRef.current) {
+            clearInterval(progressRef.current);
+            progressRef.current = null;
           }
-          return newProgress;
+          setTimeout(() => {
+            nextParagraph();
+          }, 400);
+        },
+        () => {
+          console.log('[Play] 当前段落开始朗读');
+        }
+      );
+
+      progressRef.current = setInterval(() => {
+        setProgress((prev) => {
+          if (prev >= 99) return prev;
+          return Math.min(99, prev + increment);
         });
-      }, 300);
+      }, tickInterval);
     } else {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+      if (!playState.isPlaying) {
+        stopSpeak();
+        isSpeakingRef.current = false;
       }
     }
 
     return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
+      if (progressRef.current) {
+        clearInterval(progressRef.current);
+        progressRef.current = null;
       }
     };
-  }, [playState.isPlaying, currentChapter?.id, playState.currentParagraphIndex]);
+  }, [playState.isPlaying, playState.currentParagraphIndex, currentChapter?.id]);
 
   useEffect(() => {
     if (playState.sleepTimer !== null) {
@@ -82,6 +122,12 @@ const PlayPage: React.FC = () => {
       }
     };
   }, [playState.sleepTimer]);
+
+  useEffect(() => {
+    return () => {
+      stopSpeak();
+    };
+  }, []);
 
   const renderHighlightedText = (text: string) => {
     if (!text) return null;
@@ -115,26 +161,37 @@ const PlayPage: React.FC = () => {
       Taro.showToast({ title: '请先选择章节', icon: 'none' });
       return;
     }
-    setPlaying(!playState.isPlaying);
-    console.log('[Play] 切换播放状态:', !playState.isPlaying);
+    const newPlaying = !playState.isPlaying;
+    setPlaying(newPlaying);
+    console.log('[Play] 切换播放状态:', newPlaying);
+    Taro.vibrateShort({ type: 'light' }).catch(() => {});
   };
 
   const handlePrev = () => {
+    stopSpeak();
+    isSpeakingRef.current = false;
+    setProgress(0);
     prevParagraph();
-    setSimulatedProgress(0);
+    Taro.vibrateShort({ type: 'light' }).catch(() => {});
   };
 
   const handleNext = () => {
+    stopSpeak();
+    isSpeakingRef.current = false;
+    setProgress(0);
     nextParagraph();
-    setSimulatedProgress(0);
+    Taro.vibrateShort({ type: 'light' }).catch(() => {});
   };
 
   const handleSelectChapter = (chapter: Chapter) => {
+    stopSpeak();
+    isSpeakingRef.current = false;
+    setProgress(0);
     setCurrentChapter(chapter.id);
     setCurrentParagraph(0);
-    setSimulatedProgress(0);
     setPlaying(true);
     Taro.showToast({ title: `正在播放：${chapter.title}`, icon: 'none' });
+    Taro.vibrateShort({ type: 'medium' }).catch(() => {});
   };
 
   const handleTimerSelect = (seconds: number) => {
@@ -148,6 +205,7 @@ const PlayPage: React.FC = () => {
         icon: 'success',
       });
     }
+    Taro.vibrateShort({ type: 'light' }).catch(() => {});
   };
 
   const handleCancelTimer = () => {
@@ -158,9 +216,24 @@ const PlayPage: React.FC = () => {
   const handleDecreaseSpeedQuick = () => {
     decreaseSpeed();
     Taro.showToast({
-      title: `语速已降低：${getSpeedLabel(voiceSettings.speedLevel)}`,
+      title: `语速已降低：${getSpeedLabel(Math.max(0, voiceSettings.speedLevel))}`,
       icon: 'none',
     });
+    if (playState.isPlaying && currentParagraph) {
+      stopSpeak();
+      setTimeout(() => {
+        speakText(
+          currentParagraph.text,
+          voiceSettings.voiceType,
+          Math.max(0, voiceSettings.speedLevel - 1),
+          voiceSettings.volume,
+          () => {
+            nextParagraph();
+          }
+        );
+      }, 200);
+    }
+    Taro.vibrateShort({ type: 'light' }).catch(() => {});
   };
 
   const goToSelect = () => {
@@ -199,7 +272,7 @@ const PlayPage: React.FC = () => {
   }
 
   const overallProgress = totalParagraphs > 0
-    ? ((playState.currentParagraphIndex + simulatedProgress / 100) / totalParagraphs) * 100
+    ? ((playState.currentParagraphIndex + progress / 100) / totalParagraphs) * 100
     : 0;
 
   return (

@@ -9,11 +9,67 @@ export const parseTextToParagraphs = (text: string): Paragraph[] => {
     return [];
   }
 
-  const rawParagraphs = text
+  const normalized = text
     .replace(/\r\n/g, '\n')
-    .split(/\n{2,}|\n\s+\n/)
-    .map(p => p.trim())
-    .filter(p => p.length > 0);
+    .replace(/\u3000/g, ' ')
+    .trim();
+
+  let rawParagraphs: string[] = [];
+
+  if (/\n{2,}/.test(normalized)) {
+    rawParagraphs = normalized
+      .split(/\n{2,}/)
+      .map(p => p.replace(/\n\s*/g, ' ').trim())
+      .filter(p => p.length > 0);
+  } else {
+    const lines = normalized.split('\n');
+    const currentBatch: string[] = [];
+    let buffer = '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) {
+        if (buffer) {
+          currentBatch.push(buffer.trim());
+          buffer = '';
+        }
+        continue;
+      }
+
+      const isNewParagraph =
+        /^[　\s]/.test(line) ||
+        /^["'「『"（(【\[]/.test(trimmed) ||
+        /^[0-9一二三四五六七八九十]+[、.．)]/.test(trimmed) ||
+        /^第[一二三四五六七八九十百千0-9]+/.test(trimmed) ||
+        (buffer.length > 0 && /[。！？!?…—]$/.test(buffer.trim()) && !/^[，,、；;：:]/.test(trimmed)) ||
+        (buffer.length > 40 && trimmed.length < 15 && /^[他她它我你这那大小]/.test(trimmed));
+
+      if (isNewParagraph && buffer) {
+        currentBatch.push(buffer.trim());
+        buffer = trimmed;
+      } else {
+        buffer = buffer ? buffer + (buffer.endsWith('') ? '' : ' ') + trimmed : trimmed;
+      }
+    }
+
+    if (buffer) {
+      currentBatch.push(buffer.trim());
+    }
+
+    if (currentBatch.length > 1) {
+      rawParagraphs = currentBatch.filter(p => p.length > 0);
+    } else {
+      const fallback = normalized
+        .split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 6);
+      rawParagraphs = fallback.length > 0 ? fallback : currentBatch;
+    }
+  }
+
+  if (rawParagraphs.length === 0 && normalized.length > 0) {
+    rawParagraphs = [normalized];
+  }
 
   return rawParagraphs.map(p => ({
     id: generateId(),
