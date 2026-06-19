@@ -1,0 +1,122 @@
+@use '@/styles/variables.scss' as *;
+
+.btn {
+  @include button-reset;
+  @include flex-center;
+  border-radius: $radius-button;
+  transition: all $transition-base;
+  min-width: 200rpx;
+
+  &:active {
+    opacity: 0.92;
+    transform: scale(0.98);
+  }
+}
+
+.content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-sm;
+  padding: 0 $spacing-lg;
+}
+
+.primary {
+  background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+  box-shadow: 0 6rpx 24rpx rgba(255, 107, 53, 0.3);
+}
+
+.success {
+  background: linear-gradient(135deg, $color-success 0%, $color-success-light 100%);
+  box-shadow: 0 6rpx 24rpx rgba(76, 175, 80, 0.3);
+}
+
+.warning {
+  background: linear-gradient(135deg, $color-warning 0%, #FFD180 100%);
+  box-shadow: 0 6rpx 24rpx rgba(255, 183, 77, 0.3);
+}
+
+.secondary {
+  background: linear-gradient(135deg, #FFFFFF 0%, #FAFAFA 100%);
+  border: 3rpx solid $color-border;
+  box-shadow: $shadow-card;
+}
+
+.normal {
+  height: $button-height-lg;
+}
+
+.large {
+  height: $button-height-xl;
+}
+
+.xlarge {
+  height: $button-height-xxl;
+}
+
+.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.active {
+  transform: scale(0.98);
+  box-shadow: none;
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+.icon {
+  font-size: 40rpx;
+}
+
+.textWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.text {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-white;
+  white-space: nowrap;
+}
+
+.secondary .text {
+  color: $color-text-primary;
+}
+
+.subText {
+  font-size: $font-size-xs;
+  color: rgba(255, 255, 255, 0.85);
+  margin-top: 4rpx;
+}
+
+.secondary .subText {
+  color: $color-text-secondary;
+}
+
+.large .text {
+  font-size: $font-size-xl;
+}
+
+.large .icon {
+  font-size: 48rpx;
+}
+
+.xlarge .text {
+  font-size: $font-size-xxl;
+}
+
+.xlarge .icon {
+  font-size: 56rpx;
+}
+
+.xlarge .subText {
+  font-size: $font-size-sm;
+  margin-top: $spacing-xs;
+}

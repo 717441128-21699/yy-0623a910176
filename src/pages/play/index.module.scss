@@ -1,0 +1,491 @@
+@use '@/styles/variables.scss' as *;
+
+.page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #E8F5E9 0%, #FFF8F0 40%);
+}
+
+.chapterHeader {
+  background: linear-gradient(135deg, $color-success 0%, $color-success-light 100%);
+  margin: $spacing-lg;
+  border-radius: $radius-lg;
+  padding: $spacing-xl $spacing-lg;
+  box-shadow: 0 8rpx 32rpx rgba(76, 175, 80, 0.3);
+}
+
+.chapterBadge {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.2);
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-button;
+  margin-bottom: $spacing-sm;
+}
+
+.chapterBadgeText {
+  color: $color-text-white;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+}
+
+.chapterTitle {
+  display: block;
+  font-size: $font-size-xxl;
+  font-weight: $font-weight-bold;
+  color: $color-text-white;
+  line-height: $line-height-tight;
+  margin-bottom: $spacing-md;
+}
+
+.chapterProgress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: $radius-md;
+  padding: $spacing-sm $spacing-md;
+}
+
+.progressText {
+  color: $color-text-white;
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+}
+
+.progressSub {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: $font-size-sm;
+}
+
+.textDisplay {
+  margin: 0 $spacing-lg $spacing-lg;
+  background: $color-bg-card;
+  border-radius: $radius-xl;
+  padding: $spacing-xl;
+  box-shadow: $shadow-card;
+  min-height: 400rpx;
+  border: 4rpx solid transparent;
+  transition: all $transition-base;
+}
+
+.textDisplayPlaying {
+  border-color: $color-success;
+  box-shadow: 0 8rpx 40rpx rgba(76, 175, 80, 0.2);
+}
+
+.textHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-lg;
+  padding-bottom: $spacing-md;
+  border-bottom: 2rpx dashed $color-divider;
+}
+
+.paragraphIndex {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-sm;
+  background: $color-highlight-bg;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-button;
+}
+
+.paragraphIndexText {
+  font-size: $font-size-md;
+  font-weight: $font-weight-semibold;
+  color: $color-warning;
+}
+
+.voiceTag {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(126, 87, 194, 0.1);
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-button;
+}
+
+.voiceTagText {
+  font-size: $font-size-sm;
+  color: $color-slow-indicator;
+  font-weight: $font-weight-medium;
+}
+
+.textContent {
+  font-size: $font-size-huge;
+  line-height: 2;
+  color: $color-text-primary;
+  letter-spacing: 2rpx;
+  word-break: break-all;
+}
+
+.highlightWord {
+  background: $color-highlight-bg;
+  color: $color-primary-dark;
+  padding: 0 8rpx;
+  border-radius: 8rpx;
+  font-weight: $font-weight-semibold;
+}
+
+.nameHighlight {
+  background: rgba(255, 107, 53, 0.18);
+  color: $color-primary-dark;
+}
+
+.placeHighlight {
+  background: rgba(76, 175, 80, 0.18);
+  color: #2E7D32;
+}
+
+.timerSection {
+  margin: 0 $spacing-lg $spacing-lg;
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  padding: $spacing-lg;
+  box-shadow: $shadow-card;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-md;
+}
+
+.sectionTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  display: flex;
+  align-items: center;
+  gap: $spacing-sm;
+}
+
+.timerActive {
+  background: linear-gradient(135deg, $color-warning 0%, #FFD180 100%);
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-button;
+  color: $color-text-white;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  animation: timerPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.75; }
+}
+
+.timerOptions {
+  display: flex;
+  gap: $spacing-sm;
+}
+
+.timerOption {
+  flex: 1;
+  height: 96rpx;
+  border-radius: $radius-md;
+  background: $color-bg-page;
+  border: 3rpx solid $color-border;
+  @include flex-center;
+  flex-direction: column;
+  transition: all $transition-fast;
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+.timerOptionActive {
+  background: linear-gradient(135deg, $color-warning 0%, #FFD180 100%);
+  border-color: $color-warning;
+  box-shadow: 0 4rpx 20rpx rgba(255, 183, 77, 0.4);
+
+  .timerOptionMain,
+  .timerOptionSub {
+    color: $color-text-white;
+  }
+}
+
+.timerOptionMain {
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  line-height: 1.2;
+}
+
+.timerOptionSub {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  margin-top: 4rpx;
+}
+
+.timerCancel {
+  margin-top: $spacing-md;
+  height: 72rpx;
+  border-radius: $radius-md;
+  background: rgba(229, 115, 115, 0.1);
+  border: 2rpx dashed $color-error;
+  @include flex-center;
+
+  &:active {
+    background: rgba(229, 115, 115, 0.2);
+  }
+}
+
+.timerCancelText {
+  font-size: $font-size-sm;
+  color: $color-error;
+  font-weight: $font-weight-medium;
+}
+
+.controlsSection {
+  margin: 0 $spacing-lg $spacing-lg;
+  background: $color-bg-card;
+  border-radius: $radius-xl;
+  padding: $spacing-xl $spacing-lg;
+  box-shadow: $shadow-float;
+}
+
+.progressBar {
+  width: 100%;
+  height: 12rpx;
+  background: $color-bg-page;
+  border-radius: $radius-round;
+  overflow: hidden;
+  margin-bottom: $spacing-md;
+}
+
+.progressFill {
+  height: 100%;
+  background: linear-gradient(90deg, $color-success 0%, $color-success-light 100%);
+  border-radius: $radius-round;
+  transition: width $transition-base;
+}
+
+.progressLabels {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: $spacing-xl;
+}
+
+.progressLabel {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+}
+
+.mainControls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: $spacing-xl;
+  margin-bottom: $spacing-xl;
+}
+
+.ctrlBtn {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: $radius-round;
+  @include flex-center;
+  background: $color-bg-page;
+  transition: all $transition-fast;
+
+  &:active {
+    transform: scale(0.94);
+  }
+}
+
+.ctrlBtnIcon {
+  font-size: 44rpx;
+}
+
+.playBtn {
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: $radius-round;
+  background: linear-gradient(135deg, $color-success 0%, $color-success-light 100%);
+  box-shadow: 0 12rpx 48rpx rgba(76, 175, 80, 0.45);
+  @include flex-center;
+  transition: all $transition-base;
+
+  &:active {
+    transform: scale(0.96);
+    box-shadow: 0 6rpx 24rpx rgba(76, 175, 80, 0.35);
+  }
+}
+
+.playBtnIcon {
+  font-size: 80rpx;
+  margin-left: 8rpx;
+}
+
+.pausedIcon {
+  margin-left: 0;
+}
+
+.secondaryControls {
+  display: flex;
+  justify-content: space-between;
+  padding-top: $spacing-lg;
+  border-top: 2rpx solid $color-divider;
+}
+
+.secCtrlBtn {
+  flex: 1;
+  height: 88rpx;
+  @include flex-center;
+  gap: $spacing-xs;
+  border-radius: $radius-md;
+
+  &:active {
+    background: $color-bg-hover;
+  }
+}
+
+.secCtrlIcon {
+  font-size: 32rpx;
+}
+
+.secCtrlText {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-medium;
+  color: $color-text-secondary;
+}
+
+.chapterListSection {
+  margin: 0 $spacing-lg $spacing-xl;
+}
+
+.chapterListHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: $spacing-md;
+}
+
+.chapterListTitle {
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+}
+
+.chapterListCount {
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  background: $color-bg-card;
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-button;
+}
+
+.chapterItem {
+  background: $color-bg-card;
+  border-radius: $radius-md;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-sm;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 3rpx solid transparent;
+  transition: all $transition-fast;
+
+  &:active {
+    background: $color-bg-hover;
+  }
+}
+
+.chapterItemActive {
+  border-color: $color-success;
+  background: linear-gradient(135deg, #E8F5E9 0%, #FFFFFF 80%);
+}
+
+.chapterItemLeft {
+  display: flex;
+  align-items: center;
+  gap: $spacing-md;
+  flex: 1;
+  min-width: 0;
+}
+
+.chapterNum {
+  width: 56rpx;
+  height: 56rpx;
+  border-radius: $radius-round;
+  background: $color-bg-page;
+  @include flex-center;
+  flex-shrink: 0;
+}
+
+.chapterNumActive {
+  background: linear-gradient(135deg, $color-success 0%, $color-success-light 100%);
+}
+
+.chapterNumText {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-text-secondary;
+}
+
+.chapterNumActive .chapterNumText {
+  color: $color-text-white;
+}
+
+.chapterItemInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.chapterItemName {
+  display: block;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  color: $color-text-primary;
+  @include text-ellipsis;
+}
+
+.chapterItemMeta {
+  display: block;
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  margin-top: 4rpx;
+}
+
+.playingIcon {
+  font-size: 32rpx;
+  animation: wave 1s ease-in-out infinite;
+}
+
+@keyframes wave {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+.emptyState {
+  margin: $spacing-xl $spacing-lg;
+  background: $color-bg-card;
+  border-radius: $radius-xl;
+  padding: $spacing-xl * 2 $spacing-lg;
+  text-align: center;
+  box-shadow: $shadow-card;
+}
+
+.emptyIcon {
+  font-size: 120rpx;
+  display: block;
+  margin-bottom: $spacing-lg;
+}
+
+.emptyTitle {
+  display: block;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-bold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-sm;
+}
+
+.emptyDesc {
+  display: block;
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+  line-height: $line-height-loose;
+  margin-bottom: $spacing-xl;
+}

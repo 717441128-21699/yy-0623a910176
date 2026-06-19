@@ -1,0 +1,135 @@
+@use '@/styles/variables.scss' as *;
+
+.card {
+  background: $color-bg-card;
+  border-radius: $radius-lg;
+  padding: $spacing-lg;
+  margin-bottom: $spacing-md;
+  border: 3rpx solid $color-border;
+  transition: all $transition-base;
+
+  &:active {
+    transform: scale(0.99);
+  }
+}
+
+.selected {
+  border-color: $color-primary;
+  background: linear-gradient(135deg, #FFF3E6 0%, #FFFFFF 60%);
+  box-shadow: 0 4rpx 20rpx rgba(255, 107, 53, 0.15);
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  margin-bottom: $spacing-md;
+  gap: $spacing-md;
+}
+
+.iconWrap {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: $radius-md;
+  background: linear-gradient(135deg, #FFF8F0 0%, #FFEFD5 100%);
+  @include flex-center;
+  flex-shrink: 0;
+}
+
+.icon {
+  font-size: 44rpx;
+}
+
+.info {
+  flex: 1;
+  min-width: 0;
+}
+
+.name {
+  display: block;
+  font-size: $font-size-lg;
+  font-weight: $font-weight-semibold;
+  color: $color-text-primary;
+  margin-bottom: $spacing-xs;
+}
+
+.desc {
+  display: block;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  line-height: $line-height-normal;
+}
+
+.checkbox {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: $radius-round;
+  border: 3rpx solid $color-border;
+  @include flex-center;
+  flex-shrink: 0;
+  transition: all $transition-fast;
+}
+
+.checked {
+  background: $color-primary;
+  border-color: $color-primary;
+}
+
+.checkMark {
+  color: $color-text-white;
+  font-size: $font-size-md;
+  font-weight: $font-weight-bold;
+}
+
+.bottomRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: $color-bg-page;
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  gap: $spacing-md;
+}
+
+.sampleWrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+}
+
+.sampleLabel {
+  font-size: $font-size-xs;
+  color: $color-text-tertiary;
+  flex-shrink: 0;
+}
+
+.sampleText {
+  font-size: $font-size-sm;
+  color: $color-text-secondary;
+  @include text-ellipsis;
+  font-style: italic;
+}
+
+.previewBtn {
+  background: linear-gradient(135deg, $color-info 0%, #90CAF9 100%);
+  padding: $spacing-xs $spacing-md;
+  border-radius: $radius-button;
+  @include flex-center;
+  flex-shrink: 0;
+
+  &:active {
+    opacity: 0.9;
+    transform: scale(0.96);
+  }
+}
+
+.previewPlaying {
+  background: linear-gradient(135deg, $color-slow-indicator 0%, #B39DDB 100%);
+}
+
+.previewText {
+  color: $color-text-white;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+}
